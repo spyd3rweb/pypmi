@@ -5,7 +5,7 @@ For my ipmi use case (openstack bifrost/ironic), I ended up extending the fakebm
 
 Currently I'm using an [ESP-01S Relay](https://github.com/IOT-MCU/ESP-01S-Relay-v4.0) running [Universal I/O bridge](https://github.com/eriksl/esp8266-universal-io-bridge) to wirelessly monitor and control chassis status/power through ipmi.
 
-So far I've only tested/validated pypmi with one bmc so far, but the PyPmb (Platform Management Bridge) should allow for bridging up to 255 targets from a single ipmi address:
+So far, I've only tested/validated pypmi with the Esp8266Bmc (Baseboard Management Controller), but the PyPmb (Platform Management Bridge) should allow for bridging up to 255 targets from a single ipmi address:
 - ipmitool -I lanplus -U admin -P PleaseChangeMe -H 127.0.0.1 -t 0xff power status
 
 Chassis Power is off
@@ -23,5 +23,11 @@ Planned Baseboard Management Controllers (BMC):
 
 Technically this platform should be able to implement Serial Over Lan (SOL); however, it is not yet implemented.
 
-# Example ESP8266 BMC implementation:
+# [pyghmi](https://github.com/openstack/pyghmi) integration general diagram :
+![alt text](https://github.com/spyd3rweb/pypmi/blob/master/classes_pypmb.png)
+
+# Example Platform Management Bridge (PMB) detailed diagram:
+![alt text](https://github.com/spyd3rweb/pypmi/blob/master/PyPmb.png)
+
+# Example Baseboard Management Controllers (BMC) detailed diagram:
 ![alt text](https://github.com/spyd3rweb/pypmi/blob/master/Esp8266Bmc.png)
