@@ -16,17 +16,14 @@ GPIO_CONFIG = {
 
 class DigitalPin(buttonbmc.Button):
 
-    def __init__(self, pin: int, is_output: bool = True, value: bool = False, loop=None, invert_logic: bool = False):
-        super(DigitalPin, self).__init__(value, loop)
+    def __init__(self, pin: int, is_output: bool = True, value: bool = False, invert_logic: bool = False, loop=None):
+        buttonbmc.Button.__init__(self, value, loop=loop)
         self.pin: int = pin
         self.is_output: bool = is_output
         self.initial_value: bool = value
         self.invert_logic: bool = invert_logic
         self.value: bool = value
         self.logic_level = self.value_to_logic_level(value)
-
-    def __del__(self):
-        pass
 
     async def setup(self):
         # raise NotImplementedError
@@ -85,7 +82,9 @@ class DigitalPin(buttonbmc.Button):
 
 
 class PinBmc(buttonbmc.ButtonBmc):
-    def __init__(self, authdata, button_config: dict, gpio_config: dict, port=623, loop=None):
+    def __init__(self, authdata, button_config: dict, gpio_config: dict, name=None, port=623, loop=None):
+        buttonbmc.ButtonBmc.__init__(self, authdata, button_config, name=name, port=port, loop=loop)
+
         # GPIO
         self.gpio_config = GPIO_CONFIG
         
@@ -106,8 +105,6 @@ class PinBmc(buttonbmc.ButtonBmc):
         self.reset_pin = self.gpio_config['reset_pin']
         self.invert_reset_pin_logic = self.gpio_config['invert'
                                                        '_reset_pin_logic']
-
-        super(PinBmc, self).__init__(authdata, button_config, port=port, loop=loop)
 
 
 def main():

@@ -31,6 +31,7 @@
     </Compile>
     <Compile Include="pinbmc.py" />
     <Compile Include="pypmb.py" />
+    <Compile Include="esp8266wakeonlanbmc.py" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="requirements.txt" />

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import logging
 import argparse
 import sys
 import asyncio
@@ -34,7 +34,8 @@ class Button(asyncbmc.AsyncStatus):
         return await self.set_value(False)
 
 class ButtonBmc(asyncbmc.AsyncBmc):
-    def __init__(self, authdata, button_config: dict, port=623, loop=None):
+    def __init__(self, authdata, button_config: dict, name=None, port=623, loop=None):
+        asyncbmc.AsyncBmc.__init__(self, authdata, name=name, port=port, loop=loop)
         self.power_button: Button = None
         self.reset_button: Button = None
 
@@ -65,7 +66,19 @@ class ButtonBmc(asyncbmc.AsyncBmc):
         self.power_shutdown_press_duration = self.button_config['power_shutdown_press_duration']
         self.power_shutdown_wait_duration = self.button_config['power_shutdown_wait_duration']
 
-        super(ButtonBmc, self).__init__(authdata, port=port, loop=loop)
+
+    async def setup_power_button(self):
+        raise NotImplementedError
+
+    async def setup_reset_button(self):
+        raise NotImplementedError
+
+    async def setup(self):
+       # raise NotImplementedError
+        await self.setup_power_button()
+        await self.setup_reset_button()
+
+        return await super().setup()
 
     # directive 0
     async def press_power_off(self, press_duration):
@@ -75,13 +88,13 @@ class ButtonBmc(asyncbmc.AsyncBmc):
             await self.power_button.press(press_duration)
             powerstate = await self.async_get_power_state()
         else:
-            print('already powered off')
+            logging.info('already powered off')
         return powerstate
     
     async def async_power_off(self):
-        print('abruptly remove power, '
-              'using power off press duration: {}'
-              .format(self.power_off_press_duration))
+        logging.info('abruptly remove power, '
+                     'using power off press duration: {}'
+                     .format(self.power_off_press_duration))
         powerstate = await self.press_power_off(self.power_off_press_duration)
         assert powerstate == 0  # off
 
@@ -97,12 +110,12 @@ class ButtonBmc(asyncbmc.AsyncBmc):
             await self.power_button.press(press_duration)
             powerstate = await self.async_get_power_state()
         else:
-            print('already powered on')
+            logging.info('already powered on')
         return powerstate
 
     async def async_power_on(self):
-        print('power on, using power on press duration: {}'
-              .format(self.power_on_press_duration))
+        logging.info('power on, using power on press duration: {}'
+                     .format(self.power_on_press_duration))
         powerstate = await self.press_power_on(self.power_on_press_duration)
         assert powerstate == 1  # on
 
@@ -123,11 +136,11 @@ class ButtonBmc(asyncbmc.AsyncBmc):
         return powerstate
 
     async def async_power_cycle(self):
-        print('power cycle, using power cycle off press duration: '
-              '{}, wait duration: {}, on press duration {}'
-              .format(self.power_cycle_off_press_duration,
-                      self.power_cycle_wait_duration,
-                      self.power_cycle_on_press_duration))
+        logging.info('power cycle, using power cycle off press duration: '
+                     '{}, wait duration: {}, on press duration {}'
+                     .format(self.power_cycle_off_press_duration,
+                             self.power_cycle_wait_duration,
+                             self.power_cycle_on_press_duration))
         powerstate = await self.press_power_cycle(self.power_cycle_off_press_duration,
                                       self.power_cycle_wait_duration, 
                                       self.power_cycle_on_press_duration)
@@ -141,13 +154,13 @@ class ButtonBmc(asyncbmc.AsyncBmc):
         if self.reset_button is not None:
             await self.reset_button.press(press_duration)
         else:
-            print('unable to reset due to no reset_button')
+            logging.warning('unable to reset due to no reset_button')
             # power_cycle
             await self.async_power_cycle()
         
     async def async_power_reset(self):
-        print('power reset, using power reset press duration: {}'
-                .format(self.power_reset_press_duration))
+        logging.info('power reset, using power reset press duration: {}'
+                     .format(self.power_reset_press_duration))
         powerstate = await self.press_power_reset(self.power_reset_press_duration)
         assert powerstate == 1  # on
 
@@ -164,15 +177,15 @@ class ButtonBmc(asyncbmc.AsyncBmc):
             await asyncio.sleep(wait_duration, loop=self.loop)
             powerstate = await self.async_get_power_state()
         else:
-            print("already powered off")
+            logging.info("already powered off")
         return powerstate
 
     async def async_power_shutdown(self):
-        print('politely shut down the system, '
-              'using power shutdown press duration: '
-              '{} and polite wait duration: {}'
-              .format(self.power_shutdown_press_duration, 
-                      self.power_shutdown_wait_duration))
+        logging.info('politely shut down the system, '
+                     'using power shutdown press duration: '
+                     '{} and polite wait duration: {}'
+                     .format(self.power_shutdown_press_duration, 
+                             self.power_shutdown_wait_duration))
         powerstate = await self.press_power_shutdown(self.power_shutdown_press_duration, 
                             self.power_shutdown_wait_duration)
         assert powerstate == 0  # off

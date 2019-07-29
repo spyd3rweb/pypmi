@@ -34,25 +34,27 @@ class PiPin(DigitalPin):
 class PiBmc(PinBmc):
    
     def __del__(self):
+        PinBmc.__del__(self)
         GPIO.cleanup()
-        print("Good bye!")
 
-    async def setup(self):
+    async def setup_power_status(self):
         # create power status input pin
         self.power_status = PiPin(self.status_pin, False, 
-                                  self.initial_power_status_value, self.loop, self.invert_status_pin_logic)
+                                  self.initial_power_status_value, self.invert_status_pin_logic, self.loop)
 
         await self.power_status.setup()
 
+    async def setup_power_button(self):
         # create power output pin
         self.power_button = PiPin(self.power_pin, True, 
-                                  self.initial_power_button_value, self.loop,  self.invert_power_pin_logic)
+                                  self.initial_power_button_value, self.invert_power_pin_logic, self.loop)
 
         await self.power_button.setup()
 
+    async def setup_reset_button(self):
         # create reset output pin  
         self.reset_button = PiPin(self.reset_pin, True, 
-                                  self.initial_reset_button_value, self.loop,  self.invert_reset_pin_logic)
+                                  self.initial_reset_button_value, self.invert_reset_pin_logic, self.loop)
 
         await self.reset_button.setup()
 

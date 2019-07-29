@@ -1,21 +1,20 @@
 #!/usr/bin/env python
-
+import logging
 import argparse
 import sys
 import asyncio
 import pinbmc
+from asyncbmc import AsyncThreadedObject, AsyncSerialSession
 from enum import IntEnum
+from itertools import chain
 
-class CommandEnum(IntEnum):
-    NONE        = 0x0000
-    HANDLED     = 0x0001
-    WRITE_STATE = 0x0002
-    READ_STATE  = 0x0003
 
-CommandEnum = CommandEnum
+# https://web.csulb.edu/~pnguyen/cecs277/lecnotes/Command%20Pattern.pdf
+# https://sebastiankoltun-blog.com/index.php/2018/07/08/command-handler-pattern-java-ee/
 
-class Command(object):
-    def __init__(self, receiver):
+class Command(AsyncThreadedObject):
+    def __init__(self, receiver, name=None, loop=None):
+        AsyncThreadedObject.__init__(self, name=name, loop=loop)
         self.receiver = receiver
 
     # https://stackoverflow.com/questions/50678184/how-to-pass-additional-parameters-to-handle-client-coroutine
@@ -24,46 +23,135 @@ class Command(object):
         # raise NotImplementedError
         return True
 
-class PinCommand(Command):
-    def __init__(self, receiver: Command, command_enum: CommandEnum = CommandEnum.NONE):
+class GenericCommand(Command):
+    class CommandEnum(IntEnum):
+        # Common
+        NONE        = 0x0000
+        HANDLED     = 0x0001
+
+    # https://stackoverflow.com/questions/33679930/how-to-extend-python-enum
+    #CommandEnum = IntEnum('Idx', [(i.name, i.value) for i in chain(GenericCommand.CommandEnum)])
+
+    def __init__(self, receiver, command_enum: CommandEnum = CommandEnum.NONE, loop=None):
+        Command.__init__(self, receiver, loop=loop)
         self.command_enum = command_enum
-        super(PinCommand, self).__init__(receiver)
 
-class CommandPin(pinbmc.DigitalPin):
-    def __init__(self, pin: int, is_output: bool = True, value: bool = False, loop=None, invert_logic: bool = False, retries:int = 2):
+class PinCommand(GenericCommand):
+    class CommandEnum(IntEnum):
+        # Pin
+        WRITE_STATE = 0x0100
+        READ_STATE  = 0x0101
+
+    # https://stackoverflow.com/questions/33679930/how-to-extend-python-enum
+    #CommandEnum = IntEnum('Idx', [(i.name, i.value) for i in chain(GenericCommand.CommandEnum, PinCommand.CommandEnum)])
+
+class SerialCommand(GenericCommand):
+    class CommandEnum(IntEnum):
+        # Serial
+        START       = 0x0200
+        STOP        = 0x0201
+
+    # https://stackoverflow.com/questions/33679930/how-to-extend-python-enum
+    #CommandEnum = IntEnum('Idx', [(i.name, i.value) for i in chain(GenericCommand.CommandEnum, SerialCommand.CommandEnum)])
+
+class CommandInvoker(AsyncThreadedObject):
+    def __init__(self, retries:int=2, name=None, loop=None):
+        AsyncThreadedObject.__init__(self, name=name, loop=loop)
         self.retries = retries
-        super(CommandPin, self).__init__(pin, is_output, value, loop, invert_logic)
 
-    def create_command(self, receiver, command_enum: CommandEnum = CommandEnum.NONE):
-        # raise NotImplementedError
-        return PinCommand(receiver, command_enum)
+    async def invoke(self, *commands: GenericCommand):
+        all_handled = True
+        for command in commands:
+            if command is not None:
+                tries = 0
+                is_handled = False
+                command_name = command.command_enum.name
+                while (not is_handled and tries < self.retries):
+                    tries += 1
+                    logging.info("Executing Command {}, Attempt {}".format(command_name, tries))
+                    try:
+                        is_handled = await command.execute()
+                    except Exception as e:
+                        logging.error(e)
 
-    async def invoke(self, command_enum: CommandEnum = CommandEnum.NONE):
-        tries = 0
-        is_handled = False
-        
-        while (not is_handled and tries < self.retries):
-            try:
-                tries += 1
-                print("Attempting to invoke command: {}, {} attempt(s)".format(command_enum.name, tries))
-                command = self.create_command(self, command_enum)
-                if command is not None:
-                    is_handled = await command.execute()
-                else:
-                    print("Failed to create command: {}, {} attempt(s)".format(command_enum.name, tries))
+                    # status
+                    logging.info("Command {} {}".format(command_name, "Succeeded" if is_handled else "Failed"))
+
+                if not is_handled:
+                    all_handled = False
                     break
-            except Exception as e:
-                print(e)
+            else:
+                logging.warning("Command is None!")
 
-        # status
-        print("{} invoking command: {}, in {} attempt(s)".format("Succeeded" if is_handled else "Failed", command_enum.name, tries))
-        return is_handled
+        return all_handled
 
+class CommandClient(AsyncThreadedObject):
+    def __init__(self, receiver, invoker: CommandInvoker=None, name=None, loop=None):
+        AsyncThreadedObject.__init__(self, name=name, loop=loop)
+        self.receiver = receiver
+        self.invoker = invoker if invoker else CommandInvoker(retries=2, loop=self.loop)
+
+    async def setup(self):
+        raise NotImplementedError
+
+class PinCommandClient(CommandClient):
+     
     async def write_logic_level(self):
-        return await self.invoke(CommandEnum.WRITE_STATE)
+        raise NotImplementedError
 
     async def read_logic_level(self):
-        return await self.invoke(CommandEnum.READ_STATE)
+        raise NotImplementedError
+
+class SerialCommandClient(CommandClient):
+    async def start_shell(self, shell):
+        raise NotImplementedError
+
+    async def stop_shell(self):
+        raise NotImplementedError
+
+class CommandPin(pinbmc.DigitalPin):
+    def __init__(self, pin: int, is_output: bool = True, value: bool = False, invert_logic: bool = False, loop=None):
+        pinbmc.DigitalPin.__init__(self, pin, is_output, value, invert_logic, loop=loop)
+        self.pin_command_client: PinCommandClient = None
+
+    async def setup_pin_command_client(self):
+        raise NotImplementedError
+
+    async def write_logic_level(self):
+        return await self.pin_command_client.write_logic_level()
+
+    async def read_logic_level(self):
+        return await self.pin_command_client.read_logic_level()
+
+    async def setup(self):
+        if self.is_valid_pin(self.pin):
+            await self.setup_pin_command_client()
+            if not self.pin_command_client:
+                logging.warning("Pin Command Client is None!")
+        else:
+            logging.warning("Invalid pin {}!".format(self.pin))
+
+class CommandSerial(AsyncSerialSession):
+    def __init__(self, name=None, loop=None):
+        AsyncSerialSession.__init__(self, name=name, loop=loop)
+        self.serial_command_client = None
+    
+    async def setup_serial_command_client(self):
+        raise NotImplementedError
+
+    async def setup(self):
+        await self.setup_serial_command_client()
+        if not self.serial_command_client:
+            logging.warning("Serial Command Client is None!")
+
+    async def start_shell(self, shell):
+        await self.serial_command_client.start_shell(shell)
+        return await super().start_shell(shell)
+
+    async def stop_shell(self):
+        await self.serial_command_client.stop_shell()
+        return await super().stop_shell()
+   
 
 class CommandBmc(pinbmc.PinBmc):
     pass
