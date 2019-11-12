@@ -79,8 +79,7 @@ class Esp8266WakeOnLanBmc(esp8266bmc.Esp8266Bmc):
 
                 # remove session
                 await self.command_telnet_session.disconnect()
-                # self._waiter_connected = None
-                # self._waiter_closed = None
+
             except Exception as e:
                 logging.error(e)
 

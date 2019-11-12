@@ -53,8 +53,8 @@ class Esp8266TelnetPinCommand(telnetbmc.TelnetPinCommand, Esp8266TelnetCommand):
         # Pin
         VALIDATE_IO_STATE  = 0x2100
         VALIDATE_IO_CONFIG = 0x2101
-        CONFIG_IO       = 0x2102
-        CONFIG_IO_FLAG  = 0x2103
+        CONFIG_IO       = 0x2110
+        CONFIG_IO_FLAG  = 0x2111
 
     # https://stackoverflow.com/questions/33679930/how-to-extend-python-enum
     #CommandEnum = IntEnum('Idx', [(i.name, i.value) for i in chain(telnetbmc.TelnetPinCommand.CommandEnum, Esp8266TelnetCommand.CommandEnum, Esp8266TelnetPinCommand.CommandEnum)])
@@ -112,13 +112,15 @@ class Esp8266TelnetSerialCommand(telnetbmc.TelnetSerialCommand, Esp8266TelnetCom
         VALIDATE_UART_DATA_BITS_CONFIG  = 0x2205
         VALIDATE_UART_STOP_BITS_CONFIG  = 0x2206
         VALIDATE_UART_PARITY_CONFIG  = 0x2207
-        CONFIG_UART_BRIDGE_PORT = 0x2208
-        CONFIG_UART_RX = 0x2209
-        CONFIG_UART_TX = 0x2210
-        CONFIG_UART_BAUD    = 0x0211
-        CONFIG_UART_DATA_BITS= 0x0212
-        CONFIG_UART_STOP_BITS= 0x0213
-        CONFIG_UART_PARITY= 0x0214
+        VALIDATE_FLAG_LOG_TO_UART = 0x2208
+        CONFIG_UART_BRIDGE_PORT = 0x2211
+        CONFIG_UART_RX = 0x2212
+        CONFIG_UART_TX = 0x2213
+        CONFIG_UART_BAUD    = 0x2214
+        CONFIG_UART_DATA_BITS= 0x2215
+        CONFIG_UART_STOP_BITS= 0x2216
+        CONFIG_UART_PARITY= 0x2217
+        CONFIG_FLAG_LOG_TO_UART = 0x2218
 
     # https://stackoverflow.com/questions/33679930/how-to-extend-python-enum
     #CommandEnum = IntEnum('Idx', [(i.name, i.value) for i in chain(telnetbmc.TelnetSerialCommand.CommandEnum, Esp8266TelnetCommand.CommandEnum, Esp8266TelnetSerialCommand.CommandEnum)])
@@ -142,6 +144,8 @@ class Esp8266TelnetSerialCommand(telnetbmc.TelnetSerialCommand, Esp8266TelnetCom
                 Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_STOP_BITS_CONFIG: r"us 0",
                 # up 0 none
                 Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_PARITY_CONFIG: r"up 0",
+                # fu
+                Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_FLAG_LOG_TO_UART: r"fu",
                 # bp 23
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_BRIDGE_PORT: r"bp {}".format(serial.bridge_port),
                 # im 0 1 uart
@@ -156,6 +160,8 @@ class Esp8266TelnetSerialCommand(telnetbmc.TelnetSerialCommand, Esp8266TelnetCom
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_STOP_BITS: r"us 0 {}".format(serial.stop_bits),
                 # up 0 none
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_PARITY: r"up 0 {}".format(serial.parity),
+                # fu log-to-uart
+                Esp8266TelnetSerialCommand.CommandEnum.CONFIG_FLAG_LOG_TO_UART: r"fu log-to-uart"
             })
 
         return commands
@@ -181,6 +187,8 @@ class Esp8266TelnetSerialCommand(telnetbmc.TelnetSerialCommand, Esp8266TelnetCom
                 Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_PARITY_CONFIG: r"parity\[0\]: {}".format("none" if serial.parity in {"none", 0, None, ""} else 
                                                                                                             "odd"  if serial.parity in {"odd", 1} else
                                                                                                             "even" if serial.parity in {"even", 2} else serial.parity),
+                # fu
+                Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_FLAG_LOG_TO_UART: r">\s+no log-to-uart",
                 # bp 23
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_BRIDGE_PORT: r"\> port: {}".format(serial.bridge_port),
                 # im 0 1 uart
@@ -195,8 +203,10 @@ class Esp8266TelnetSerialCommand(telnetbmc.TelnetSerialCommand, Esp8266TelnetCom
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_STOP_BITS: r"(\> cannot delete config \(default values\)|data bits\[0\]: {})".format(serial.data_bits),
                 # up 0 none
                 Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_PARITY: r"(none\> cannot set config|parity\[0\]: {})".format("none" if serial.parity in {"none", 0, None, ""} else 
-                                                                                                                              "odd"  if serial.parity in {"odd", 1} else
-                                                                                                                              "even" if serial.parity in {"even", 2} else serial.parity),
+                                                                                                                                "odd"  if serial.parity in {"odd", 1} else
+                                                                                                                                "even" if serial.parity in {"even", 2} else serial.parity),
+                #fu log-to-uart 
+                Esp8266TelnetSerialCommand.CommandEnum.CONFIG_FLAG_LOG_TO_UART: r">\s+no log-to-uart",
             })
 
         return responses
@@ -212,14 +222,14 @@ class Esp8266TelnetPinCommandClient(commandbmc.PinCommandClient):
                     # Check for valid config first
                     has_valid_config = await self.invoker.invoke(Esp8266TelnetPinCommand(self.receiver, Esp8266TelnetPinCommand.CommandEnum.VALIDATE_IO_CONFIG, loop=self.loop))
                     if not has_valid_config:
-                        logging.info("Unexpected config for pin {} of host {}!".format(pin.pin, pin.command_telnet_session.host))
+                        logging.debug("Unexpected config for pin {} of host {}!".format(pin.pin, pin.command_telnet_session.host))
                         await self.invoker.invoke(Esp8266TelnetPinCommand(self.receiver, Esp8266TelnetPinCommand.CommandEnum.CONFIG_IO, loop=self.loop),
                                                   Esp8266TelnetPinCommand(self.receiver, Esp8266TelnetPinCommand.CommandEnum.CONFIG_IO_FLAG, loop=self.loop))
 
                     # Check for valid state second
                     has_valid_state = await self.invoker.invoke(Esp8266TelnetPinCommand(self.receiver, Esp8266TelnetPinCommand.CommandEnum.VALIDATE_IO_STATE, loop=self.loop))
                     if not has_valid_state:
-                        logging.info("Unexpected logic level {} for pin {}!".format(pin.logic_level, pin.pin))
+                        logging.debug("Unexpected logic level {} for pin {}!".format(pin.logic_level, pin.pin))
                         if pin.is_output:
                             await self.invoker.invoke(Esp8266TelnetPinCommand(self.receiver, commandbmc.PinCommand.CommandEnum.WRITE_STATE, loop=self.loop))
                         else:
@@ -245,7 +255,8 @@ class Esp8266TelnetSerialCommandClient(commandbmc.SerialCommandClient):
                 has_connection = await self.invoker.invoke(Esp8266TelnetSerialCommand(self.receiver, telnetbmc.TelnetCommand.CommandEnum.KEEP_ALIVE, loop=self.loop))
                 if has_connection:
                     # Check for valid uart config first
-                    has_valid_config = await self.invoker.invoke(Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_BRIDGE_PORT_CONFIG, loop=self.loop),
+                    has_valid_config = await self.invoker.invoke(Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_FLAG_LOG_TO_UART, loop=self.loop),
+                                                                 Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_BRIDGE_PORT_CONFIG, loop=self.loop),
                                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_TX_CONFIG, loop=self.loop),
                                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_RX_CONFIG, loop=self.loop),
                                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_BAUD_CONFIG, loop=self.loop),
@@ -253,8 +264,9 @@ class Esp8266TelnetSerialCommandClient(commandbmc.SerialCommandClient):
                                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_STOP_BITS_CONFIG, loop=self.loop),
                                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.VALIDATE_UART_PARITY_CONFIG, loop=self.loop))
                     if not has_valid_config:
-                        logging.info("Unexpected config for serial command host {}!".format(serial.command_telnet_session.host))
-                        await self.invoker.invoke(Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_BRIDGE_PORT, loop=self.loop),
+                        logging.debug("Unexpected config for serial command host {}!".format(serial.command_telnet_session.host))
+                        await self.invoker.invoke(Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_FLAG_LOG_TO_UART, loop=self.loop),
+                                                  Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_BRIDGE_PORT, loop=self.loop),
                                                   Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_TX, loop=self.loop),
                                                   Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_RX, loop=self.loop),
                                                   Esp8266TelnetSerialCommand(self.receiver, Esp8266TelnetSerialCommand.CommandEnum.CONFIG_UART_BAUD, loop=self.loop),

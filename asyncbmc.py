@@ -172,7 +172,7 @@ class AsyncSessionProxy(AsyncThreadedObject):
         self.lastdata = data
         self.lastcode = code
         if self.session is not None:
-            logging.debug('''IPMI Response :
+            logging.info('''IPMI Response :
                               localsid: {}
                         sequencenumber: {}
                                timeout: {}
@@ -397,6 +397,7 @@ class AsyncBmc(fakebmc.FakeBmc, AsyncThreadedObject):
         raise NotImplementedError
 
     async def async_get_power_state(self):
+        logging.info('checking power status')
         if self.power_status is not None:
             powerstate = await self.power_status.get_value()
             self.powerstate = int(powerstate)

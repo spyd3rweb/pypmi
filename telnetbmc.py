@@ -93,7 +93,7 @@ class TelnetSession(asyncbmc.AsyncSession):
             #except Exception as e:
                 # self._waiter_connected = None
                 # self._waiter_closed = None
-                logging.error("Connection attempt {} timed out after {}s".format(tries, self.connection_timeout))
+                logging.warning("Connection attempt {} timed out after {}s".format(tries, self.connection_timeout))
 
             #await self.shell(self.reader, self.writer)
             # coro = telnetlib3.open_connection(self.telnet_host, self.telnet_port, shell=self.shell, loop=self.loop)
@@ -104,9 +104,18 @@ class TelnetSession(asyncbmc.AsyncSession):
        
         
     async def disconnect(self):
+        is_connected = True
         # disconnect
-        if await self.is_connected():
+        try:
             self.writer.protocol.eof_received()
+            is_connected = await self.is_connected()
+        except Exception as e:
+            logging.error(e)
+        finally:
+            self._waiter_connected = None
+            self._waiter_closed = None
+            
+        return is_connected
 
 
     async def write(self, command_text):
@@ -289,14 +298,14 @@ class TelnetBmc(commandbmc.CommandBmc):
         self.sol_telnet_connection_retries = self.sol_telnet_config['connection_retries']
 
     async def setup_command_telnet_session(self):
-        asyncio.sleep(0, loop=self.loop)
+        await asyncio.sleep(0, loop=self.loop)
         self.command_telnet_session = TelnetSession(self.command_telnet_host, self.command_telnet_port, 
                                                     self.command_telnet_baud, self.command_telnet_crlf, 
                                                     self.command_telnet_response_timeout, self.command_telnet_connection_timeout, 
                                                     self.command_telnet_connection_retries, loop=self.loop)
 
     async def setup_serial_session(self):
-        asyncio.sleep(0, loop=self.loop)
+        await asyncio.sleep(0, loop=self.loop)
         self.serial_session = TelnetSession(self.sol_telnet_host, self.sol_telnet_port, 
                                             self.sol_telnet_baud, self.sol_telnet_crlf,
                                             self.sol_telnet_response_timeout, self.sol_telnet_connection_timeout, 

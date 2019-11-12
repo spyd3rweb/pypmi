@@ -130,16 +130,17 @@ def main():
     args = parser.parse_args()
 
     # logging
-    logging.basicConfig(level=logging.DEBUG, format='%(relativeCreated)6d %(threadName)s %(message)s')
+    level = logging.INFO # logging.DEBUG # 
+    logging.basicConfig(level=level, format='%(relativeCreated)6d %(threadName)s %(levelname)s:%(message)s')
 
-    mypmb = PyPmb({"test":"changeme"}, name="pmb", port=args.port, loop=asyncio.get_event_loop())
+    mypmb = PyPmb({"admin":"changeme"}, name="pmb", port=args.port, loop=asyncio.get_event_loop())
 
     loop = None #mypmb.loop
 
     # add target BMCs
     mypmb.add_target(1, fakebmc.FakeBmc(mypmb.authdata, port=None))
-    mypmb.add_target(2, Esp8266Bmc(mypmb.authdata, {}, {}, {'host':'192.168.3.11'}, {'host':'192.168.3.11'}, {'baud_rate':'38400'}, name="server1", port=None, loop=loop))
-    mypmb.add_target(3, Esp8266WakeOnLanBmc(mypmb.authdata, {}, {}, {'host':'192.168.25.12'}, {'host':'192.168.25.12'}, {'baud_rate':'38400'}, {'mac':'AA:BB:CC:DD:EE:FF', 'ip':'192.168.25.255'}, name="server02", port=None, loop=loop)) 
+    #mypmb.add_target(2, Esp8266Bmc(mypmb.authdata, {}, {}, {'host':'192.168.1.11'}, {'host':'192.168.1.11'}, {'baud_rate':'38400'}, name="cloud1", port=None, loop=loop))
+    #mypmb.add_target(3, Esp8266WakeOnLanBmc(mypmb.authdata, {}, {}, {'host':'192.168.11.12'}, {'host':'192.168.1.12'}, {'baud_rate':'38400'}, {'mac':'AA:BB:CC:DD:EE:FF', 'ip':'192.168.1.255'}, name="cloud1", port=None, loop=loop)) 
     
     # setup
     asyncbmc.wait_for_sync(mypmb.setup(), loop=mypmb.loop)

@@ -68,14 +68,14 @@ class CommandInvoker(AsyncThreadedObject):
                 command_name = command.command_enum.name
                 while (not is_handled and tries < self.retries):
                     tries += 1
-                    logging.info("Executing Command {}, Attempt {}".format(command_name, tries))
+                    logging.debug("Executing Command {}, Attempt {}".format(command_name, tries))
                     try:
                         is_handled = await command.execute()
                     except Exception as e:
                         logging.error(e)
 
                     # status
-                    logging.info("Command {} {}".format(command_name, "Succeeded" if is_handled else "Failed"))
+                    logging.debug("Command {} {}".format(command_name, "Succeeded" if is_handled else "Failed"))
 
                 if not is_handled:
                     all_handled = False
