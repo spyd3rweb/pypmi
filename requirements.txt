@@ -2,7 +2,7 @@ asn1crypto==0.24.0
 asyncio==3.4.3
 certifi==2019.3.9
 cffi==1.12.2
-cryptography==2.6.1
+cryptography==3.2
 fakeRPiGPIO==0.3a1
 future==0.17.1
 idna==2.8
